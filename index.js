@@ -1,119 +1,120 @@
-// Your code here
-document.addEventListener('DOMContentLoaded', () => {
-    const baseURL = 'http://localhost:3000';
-    const filmsList = document.getElementById('films');
-    const movieDetails = document.getElementById('movie-details');
+const baseURL = "http://localhost:3000/films";
 
-    // Function to fetch all films and populate the films menu
-    const fetchFilms = () => {
-        fetch(`${baseURL}/films`)
-            .then(response => response.json())
-            .then(films => {
-                films.forEach(film => {
-                    const filmItem = document.createElement('li');
-                    filmItem.classList.add('film', 'item');
-                    filmItem.textContent = film.title;
-                    filmItem.dataset.filmId = film.id;
-                    filmsList.appendChild(filmItem);
-
-                    filmItem.addEventListener('click', () => displayMovieDetails(film));
-                });
+function getMovies() {
+    fetch(baseURL)
+      .then(response => response.json())
+      .then(data => {
+        const filmsList = document.getElementById('films'); // Get reference to the ul element
+  
+        // Clear any existing content in the filmsList
+        filmsList.innerHTML = '';
+  
+        data.forEach(movie => {
+          const li = document.createElement('li');
+          li.classList.add('film', 'item');
+  
+          // Create text content for the li element
+          li.textContent = movie.title;
+          
+          // Create a delete button
+          const deleteButton = document.createElement('button');
+          deleteButton.textContent = 'Delete';
+  
+          // Add a click event listener to the delete button
+          deleteButton.addEventListener('click', function() {
+            // Send request to delete movie on backend
+            const movieId = movie.id; // Assuming you have a movie ID
+            fetch(`${baseURL}/${movieId}`, {
+              method: 'DELETE'
             })
-            .catch(error => console.error('Error fetching films:', error));
-    };
+            .then(response => {
+              if (!response.ok) {
+                throw new Error('Failed to delete movie.');
+              }
+              // Remove the li element from the DOM
+              li.remove();
+            })
+            .catch(error => console.error('Error deleting movie:', error));
+          });
+  
+          // Append the delete button to the li element
+          li.appendChild(deleteButton);
+  
+          // Append the new li to the ul
+          filmsList.appendChild(li);
+        });
+      })
+      .catch(error => console.error('Error fetching data:', error));
+  }
+  
+  // Call getMovies to fetch data and update the HTML
+  getMovies();
+  
 
-    // Function to display movie details
-    const displayMovieDetails = (film) => {
-        const availableTickets = film.capacity - film.tickets_sold;
-        movieDetails.innerHTML = `
-            <h2>${film.title}</h2>
-            <img src="${film.poster}" alt="${film.title} Poster">
-            <p>Runtime: ${film.runtime} minutes</p>
-            <p>Showtime: ${film.showtime}</p>
-            <p>Description: ${film.description}</p>
-            <p>Available Tickets: ${availableTickets}</p>
-            <button id="buy-ticket" data-film-id="${film.id}" ${availableTickets === 0 ? 'disabled' : ''}>Buy Ticket</button>
-            <button id="delete-movie" data-film-id="${film.id}">Delete Movie</button>
-        `;
+function firstMovie() {
+    fetch(baseURL)
+        .then(response => response.json())
+        .then(data => {
+            const movie = data[0]; // Assuming you want information for the first movie in the list
 
-        const buyTicketButton = document.getElementById('buy-ticket');
-        buyTicketButton.addEventListener('click', buyTicket);
+            // Extract movie information
+            const title = movie.title;
+            const runtime = movie.runtime;
+            const description = movie.description; // Assuming there is a 'description' property in your data
+            const showtime = movie.showtime;
+            const capacity = movie.capacity;
+            let availableTickets = capacity - movie.tickets_sold;
+            const poster = movie.poster;
 
-        const deleteMovieButton = document.getElementById('delete-movie');
-        deleteMovieButton.addEventListener('click', deleteMovie);
-    };
+            // Update HTML elements with movie information
+            document.getElementById('poster').src = poster;
+            document.getElementById('title').textContent = title;
+            document.getElementById('runtime').textContent = `${runtime} minutes`;
+            document.getElementById('film-info').textContent = description;
+            document.getElementById('showtime').textContent = showtime;
+            const ticketNumElement = document.getElementById('ticket-num');
+            ticketNumElement.textContent = `${availableTickets}`;
 
-    // Function to handle buying tickets
-    const buyTicket = () => {
-        const filmId = event.target.dataset.filmId;
-        fetch(`${baseURL}/films/${filmId}`)
-            .then(response => response.json())
-            .then(film => {
-                const availableTickets = film.capacity - film.tickets_sold;
+            // Function to handle buying tickets
+            const buyTicketHandler = function () {
                 if (availableTickets > 0) {
-                    const newTicketsSold = film.tickets_sold + 1;
-                    fetch(`${baseURL}/films/${filmId}`, {
+                    availableTickets--; // Decrement availableTickets
+                    ticketNumElement.textContent = `${availableTickets}`; // Update HTML
+
+                    // Send request to update tickets_sold count on backend
+                    const movieId = 0; // Assuming you have a movie ID
+                    const ticketsSold = ticketNumElement.textContent;
+
+                    // Send PATCH request to update tickets_sold count
+                    fetch(`${baseURL}/${movieId}`, {
                         method: 'PATCH',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ tickets_sold: newTicketsSold })
+                        body: JSON.stringify({ tickets_sold: ticketsSold })
                     })
-                    .then(() => {
-                        // Update frontend display
-                        displayMovieDetails({ ...film, tickets_sold: newTicketsSold });
-                        // Persist ticket sale
-                        persistTicketSale(filmId);
-                        // Check if movie is sold out
-                        if (newTicketsSold === film.capacity) {
-                            markMovieAsSoldOut(filmId);
-                        }
-                    })
-                    .catch(error => console.error('Error buying ticket:', error));
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Failed to update tickets_sold count.');
+                            }
+                            // Handle success response here if needed
+                        })
+                        .catch(error => console.error('Error updating tickets_sold count:', error));
+
                 } else {
-                    alert('Sorry, no more tickets available for this movie.');
+                    alert('Tickets are sold out!');
+                    // Update buy button to "Sold Out"
+                    const buyButton = document.getElementById('buy-ticket');
+                    buyButton.textContent = 'Sold Out';
+                    buyButton.disabled = true; // Optionally disable the button
                 }
-            })
-            .catch(error => console.error('Error fetching film details:', error));
-    };
+            };
 
-    // Function to persist ticket sale
-    const persistTicketSale = (filmId) => {
-        fetch(`${baseURL}/tickets`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ film_id: filmId, number_of_tickets: 1 })
+            // Add event listener to buy button
+            document.getElementById('buy-ticket').addEventListener('click', buyTicketHandler);
         })
-        .then(response => response.json())
-        .then(ticket => console.log('Ticket purchased:', ticket))
-        .catch(error => console.error('Error persisting ticket sale:', error));
-    };
+        .catch(error => console.error('Error fetching data:', error));
+}
 
-    // Function to delete movie
-    const deleteMovie = () => {
-        const filmId = event.target.dataset.filmId;
-        fetch(`${baseURL}/films/${filmId}`, {
-            method: 'DELETE'
-        })
-        .then(() => {
-            const filmItemToDelete = document.querySelector(`[data-film-id="${filmId}"]`);
-            filmItemToDelete.remove();
-            console.log('Movie deleted successfully.');
-        })
-        .catch(error => console.error('Error deleting movie:', error));
-    };
-
-    // Function to mark movie as sold out
-    const markMovieAsSoldOut = (filmId) => {
-        const filmItem = document.querySelector(`[data-film-id="${filmId}"]`);
-        filmItem.classList.add('sold-out');
-        const buyTicketButton = filmItem.querySelector('#buy-ticket');
-        buyTicketButton.textContent = 'Sold Out';
-        buyTicketButton.disabled = true;
-    };
-
-    // Initial setup
-    fetchFilms();
-});
+// Call firstMovie to fetch data and update the HTML
+firstMovie();
